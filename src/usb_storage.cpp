@@ -6,6 +6,7 @@
 #include "USBCDC.h"
 #include "SD_MMC.h"
 #include "lcd.h"
+#include "logger.h"
 
 // Composite USB device: MSC (mass storage) + CDC (virtual serial port).
 // Both must be registered before USB.begin() is called so the host sees
@@ -37,7 +38,7 @@ static int32_t onRead(uint32_t lba, uint32_t offset, void *buffer, uint32_t bufs
 }
 
 static bool onStartStop(uint8_t power_condition, bool start, bool load_eject) {
-    USBSerial.printf("MSC START/STOP: power: %u, start: %u, eject: %u\n", power_condition, start, load_eject);
+    log_printf("MSC START/STOP: power: %u, start: %u, eject: %u\n", power_condition, start, load_eject);
     leds[0] = CRGB::Red;
     FastLED.show();
     return true;
@@ -47,10 +48,10 @@ static void usbEventCallback(void *arg, esp_event_base_t event_base, int32_t eve
     if (event_base == ARDUINO_USB_EVENTS) {
         arduino_usb_event_data_t *data = (arduino_usb_event_data_t *)event_data;
         switch (event_id) {
-            case ARDUINO_USB_STARTED_EVENT: USBSerial.println("USB PLUGGED"); break;
-            case ARDUINO_USB_STOPPED_EVENT: USBSerial.println("USB UNPLUGGED"); break;
-            case ARDUINO_USB_SUSPEND_EVENT: USBSerial.printf("USB SUSPENDED: remote_wakeup_en: %u\n", data->suspend.remote_wakeup_en); break;
-            case ARDUINO_USB_RESUME_EVENT:  USBSerial.println("USB RESUMED"); break;
+            case ARDUINO_USB_STARTED_EVENT: log_printf("USB PLUGGED\n"); break;
+            case ARDUINO_USB_STOPPED_EVENT: log_printf("USB UNPLUGGED\n"); break;
+            case ARDUINO_USB_SUSPEND_EVENT: log_printf("USB SUSPENDED: remote_wakeup_en: %u\n", data->suspend.remote_wakeup_en); break;
+            case ARDUINO_USB_RESUME_EVENT:  log_printf("USB RESUMED\n"); break;
             default: break;
         }
     }

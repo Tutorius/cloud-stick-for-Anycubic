@@ -10,6 +10,7 @@
 #include "usb_storage.h"
 #include "lcd.h"
 #include "config_loader.h"
+#include "logger.h"
 
 // Global dashboard state
 DashboardState g_dash_state = {0};
@@ -51,17 +52,20 @@ void setup() {
     // prints before USB enumerates will be buffered and flushed once
     // the host connects.
     init_usb_storage();
+    
+    // Initialize logger to SD card
+    log_init();
 
-    USBSerial.println("[main] Storage and USB initialized.");
+    log_printf("[main] Storage and USB initialized.\n");
 
     // Load configuration from SD card
-    WifiConfig config = load_config_from_sd();
+    CloudConfig config = load_config_from_sd();
 
     if (config.is_valid) {
-        USBSerial.printf("[main] Connecting to WiFi SSID: %s\n", config.ssid.c_str());
+        log_printf("[main] Connecting to WiFi SSID: %s\n", config.ssid.c_str());
         lcd_show_text("Connecting WiFi...");
         
-        WiFi.begin(config.ssid.c_str(), config.password.c_str());
+        WiFi.begin(config.ssid.c_str(), config.wifi_password.c_str());
         
         // Wait for connection with a timeout (e.g. 10 seconds)
         int timeout_ms = 10000;
@@ -69,23 +73,22 @@ void setup() {
         while (WiFi.status() != WL_CONNECTED && elapsed < timeout_ms) {
             delay(500);
             elapsed += 500;
-            USBSerial.print(".");
+            log_printf(".");
         }
-        USBSerial.println();
+        log_printf("\n");
 
         if (WiFi.status() == WL_CONNECTED) {
-            USBSerial.print("[main] WiFi connected! IP: ");
-            USBSerial.println(WiFi.localIP());
+            log_printf("[main] WiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
             lcd_show_text("WiFi Connected!");
             delay(1000); // Let the user read the status
             lcd_show_text(WiFi.localIP().toString().c_str());
         } else {
-            USBSerial.println("[main] WiFi connection timed out.");
+            log_printf("[main] WiFi connection timed out.\n");
             lcd_show_error("WiFi Failed.");
         }
         delay(2000); // Let the user read the status
     } else {
-        USBSerial.println("[main] Skipping WiFi connection.");
+        log_printf("[main] Skipping WiFi connection.\n");
     }
 
     // Start background internet checker
@@ -99,7 +102,7 @@ void setup() {
     strcpy(g_dash_state.last_action, "Ready.");
     lcd_dashboard_update(g_dash_state);
 
-    USBSerial.println("[main] Setup complete.");
+    log_printf("[main] Setup complete.\n");
 }
 
 void loop() {
