@@ -20,6 +20,7 @@ CloudConfig load_config_from_sd() {
     config.password = "";
     config.sync_interval_s = 60;
     config.settle_time_s = 2;
+    config.max_file_size_mb = 0;
 
     // Ensure directory exists
     if (!SD_MMC.exists(CONFIG_DIR)) {
@@ -45,6 +46,7 @@ CloudConfig load_config_from_sd() {
         doc["password"] = "pass";
         doc["sync_interval_s"] = 60;
         doc["settle_time_s"] = 2;
+        doc["max_file_size_mb"] = 0;
         
         if (serializeJson(doc, file) == 0) {
             stick_log_printf("[config] Failed to write to template file\n");
@@ -78,6 +80,7 @@ CloudConfig load_config_from_sd() {
     config.password = doc["password"] | "";
     config.sync_interval_s = doc["sync_interval_s"] | 60;
     config.settle_time_s = doc["settle_time_s"] | 2;
+    config.max_file_size_mb = doc["max_file_size_mb"] | 0;
 
     // Check if the user has changed the template
     if (config.ssid == TEMPLATE_SSID || config.ssid.length() == 0 || config.server_url == TEMPLATE_SERVER) {

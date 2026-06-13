@@ -14,14 +14,22 @@
 #include "webdav_client.h"
 #include "sync_engine.h"
 
+
+
 // Global dashboard state
 DashboardState g_dash_state = {0};
 
 // Task to periodically check internet reachability
 void internet_check_task(void *pvParameters) {
     WiFiClient client;
+    bool was_connected = false;
     while (1) {
         if (WiFi.status() == WL_CONNECTED) {
+            if (!was_connected) {
+                was_connected = true;
+                snprintf(g_dash_state.last_action, sizeof(g_dash_state.last_action), "IP: %s", WiFi.localIP().toString().c_str());
+            }
+
             int32_t rssi = WiFi.RSSI();
             if (rssi != 0) { // Ignore 0 which is often a transient read error
                 if (rssi > -60) g_dash_state.wifi_signal = 3;
@@ -37,6 +45,10 @@ void internet_check_task(void *pvParameters) {
                 g_dash_state.internet_connected = false;
             }
         } else {
+            if (was_connected) {
+                was_connected = false;
+                strncpy(g_dash_state.last_action, "Connecting...", sizeof(g_dash_state.last_action));
+            }
             g_dash_state.wifi_signal = 0; // 0 draws the strike
             g_dash_state.internet_connected = false;
         }
@@ -45,6 +57,12 @@ void internet_check_task(void *pvParameters) {
 }
 
 void setup() {
+    // Wait for the USB host to finish enumerating and the power rail to
+    // stabilise before starting peripherals. This prevents the concurrent
+    // current draw (LCD + SD + LED + WiFi radio) from causing a voltage sag
+    // that trips the brownout detector into a reset loop.
+    delay(500);
+
     // Bring up the display first so the user sees feedback immediately.
     lcd_init();
     lcd_show_loading();
@@ -63,7 +81,11 @@ void setup() {
     // Load configuration from SD card
     CloudConfig config = load_config_from_sd();
 
-    // Connect to WiFi (Asynchronous)
+    // Connect to WiFi (Asynchronous).
+    // Extra delay before starting the WiFi radio — its startup current spike
+    // (~240 mA) is the largest single draw and is staggered here so it doesn't
+    // overlap with USB enumeration.
+    delay(300);
     if (config.is_valid && config.ssid.length() > 0) {
         stick_log_printf("[main] Connecting to WiFi: %s (async)\n", config.ssid.c_str());
         WiFi.begin(config.ssid.c_str(), config.wifi_password.c_str());
@@ -87,7 +109,11 @@ void setup() {
 
     // Set initial values
     g_dash_state.sd_mounted = true;
-    strcpy(g_dash_state.last_action, "Ready.");
+    if (config.is_valid && config.ssid.length() > 0) {
+        strcpy(g_dash_state.last_action, "Connecting...");
+    } else {
+        strcpy(g_dash_state.last_action, "Ready.");
+    }
     lcd_dashboard_update(g_dash_state);
 
     stick_log_printf("[main] Setup complete.\n");

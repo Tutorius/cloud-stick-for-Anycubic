@@ -114,6 +114,144 @@ private:
     }
 };
 
+class ProgressWriteStream : public Stream {
+public:
+    ProgressWriteStream(File& file, size_t totalSize) : _file(file), _totalSize(totalSize), _bytesWritten(0), _lastUpdate(0) {}
+    
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    void flush() override { _file.flush(); }
+    
+    size_t write(uint8_t b) override {
+        size_t n = _file.write(b);
+        _bytesWritten += n;
+        update_progress();
+        return n;
+    }
+    
+    size_t write(const uint8_t *buffer, size_t size) override {
+        size_t n = _file.write(buffer, size);
+        _bytesWritten += n;
+        update_progress();
+        return n;
+    }
+    
+private:
+    File& _file;
+    size_t _totalSize;
+    size_t _bytesWritten;
+    unsigned long _lastUpdate;
+    
+    void update_progress() {
+        if (millis() - _lastUpdate > 500) {
+            _lastUpdate = millis();
+            if (_totalSize > 0) {
+                int percent = (int)(((uint64_t)_bytesWritten * 100) / _totalSize);
+                if (g_dash_state.sync_total_files > 0) {
+                    snprintf(g_dash_state.last_action, sizeof(g_dash_state.last_action), 
+                             "Dn %d%% (%d/%d)", percent, g_dash_state.sync_current_file, g_dash_state.sync_total_files);
+                } else {
+                    snprintf(g_dash_state.last_action, sizeof(g_dash_state.last_action), "Downloading %d%%", percent);
+                }
+            }
+        }
+    }
+};
+
+String WebDAVClient::urlDecode(const String& str) {
+    String ret = "";
+    char temp[] = "0x00";
+    for (size_t i=0; i<str.length(); i++) {
+        if (str[i] == '%') {
+            if (i+2 < str.length()) {
+                temp[2] = str[i+1];
+                temp[3] = str[i+2];
+                ret += (char)strtol(temp, NULL, 16);
+                i += 2;
+            }
+        } else if (str[i] == '+') {
+            ret += ' ';
+        } else {
+            ret += str[i];
+        }
+    }
+    return ret;
+}
+
+class XMLParserStream : public Stream {
+public:
+    std::vector<RemoteFile>& files;
+    String currentText;
+    String currentTag;
+    bool inTag;
+    RemoteFile currentFile;
+    bool inResponse;
+    bool isCollection;
+    
+    XMLParserStream(std::vector<RemoteFile>& f) : files(f), inTag(false), inResponse(false), isCollection(false) {}
+    
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    void flush() override {}
+    
+    size_t write(const uint8_t *buffer, size_t size) override {
+        for(size_t i=0; i<size; i++) {
+            write(buffer[i]);
+        }
+        return size;
+    }
+
+    size_t write(uint8_t b) override {
+        char c = (char)b;
+        if (c == '<') {
+            inTag = true;
+            if (inResponse) {
+                if (currentTag.endsWith("href>")) {
+                    currentFile.name = currentText;
+                } else if (currentTag.endsWith("getcontentlength>")) {
+                    currentFile.size = currentText.toInt();
+                } else if (currentTag.endsWith("collection/>") || currentTag.endsWith("collection>")) {
+                    isCollection = true;
+                }
+            }
+            currentText = "";
+            currentTag = "<";
+        } else if (c == '>') {
+            inTag = false;
+            currentTag += '>';
+            
+            if (currentTag.endsWith("response>")) {
+                if (currentTag.indexOf("/") != -1) { // </d:response>
+                    if (!isCollection) {
+                        currentFile.name = WebDAVClient::urlDecode(currentFile.name);
+                        int lastSlash = currentFile.name.lastIndexOf('/');
+                        if (lastSlash != -1) {
+                            currentFile.name = currentFile.name.substring(lastSlash + 1);
+                        }
+                        if (currentFile.name.length() > 0) {
+                            files.push_back(currentFile);
+                        }
+                    }
+                    inResponse = false;
+                } else { // <d:response>
+                    inResponse = true;
+                    currentFile = RemoteFile();
+                    isCollection = false;
+                }
+            }
+        } else {
+            if (inTag) {
+                currentTag += c;
+            } else {
+                currentText += c;
+            }
+        }
+        return 1;
+    }
+};
+
 bool WebDAVClient::upload_file(const char* local_path, const char* remote_path) {
     File file = SD_MMC.open(local_path, FILE_READ);
     if (!file) {
@@ -169,5 +307,128 @@ bool WebDAVClient::upload_file(const char* local_path, const char* remote_path) 
 
     http.end();
     file.close();
+    return success;
+}
+
+bool WebDAVClient::list_files(const char* remote_dir, std::vector<RemoteFile>& files) {
+    String url = _server_url;
+    if (!url.endsWith("/")) {
+        url += "/";
+    }
+    
+    String encodedPath = "";
+    const char* p = remote_dir;
+    while (*p != '\0') {
+        if (*p == '/') {
+            encodedPath += '/';
+            p++;
+        } else {
+            const char* start = p;
+            while (*p != '\0' && *p != '/') p++;
+            String segment = String(start).substring(0, p - start);
+            encodedPath += urlEncode(segment.c_str());
+        }
+    }
+    url += encodedPath;
+
+    stick_log_printf("[webdav] Listing files at %s\n", url.c_str());
+
+    HTTPClient http;
+    http.setTimeout(20000);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.begin(url);
+    http.setAuthorization(_username.c_str(), _password.c_str());
+    http.addHeader("Depth", "1");
+    
+    String propfindXML = "<?xml version=\"1.0\"?>\n"
+                         "<d:propfind xmlns:d=\"DAV:\">\n"
+                         "  <d:prop>\n"
+                         "    <d:getlastmodified/>\n"
+                         "    <d:getcontentlength/>\n"
+                         "    <d:resourcetype/>\n"
+                         "  </d:prop>\n"
+                         "</d:propfind>";
+
+    int httpCode = http.sendRequest("PROPFIND", propfindXML);
+    bool success = false;
+    
+    if (httpCode == 207) {
+        XMLParserStream parser(files);
+        http.writeToStream(&parser);
+        success = true;
+        stick_log_printf("[webdav] Found %d files.\n", files.size());
+    } else {
+        stick_log_printf("[webdav] PROPFIND failed. HTTP Code: %d\n", httpCode);
+    }
+    http.end();
+    return success;
+}
+
+bool WebDAVClient::download_file(const char* remote_path, const char* local_path) {
+    String encodedPath = "";
+    const char* p = remote_path;
+    while (*p != '\0') {
+        if (*p == '/') {
+            encodedPath += '/';
+            p++;
+        } else {
+            const char* start = p;
+            while (*p != '\0' && *p != '/') p++;
+            String segment = String(start).substring(0, p - start);
+            encodedPath += urlEncode(segment.c_str());
+        }
+    }
+    String url = _server_url;
+    if (!url.endsWith("/")) url += "/";
+    url += encodedPath;
+
+    stick_log_printf("[webdav] Downloading %s to %s\n", url.c_str(), local_path);
+
+    HTTPClient http;
+    http.setTimeout(30000);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.begin(url);
+    http.setAuthorization(_username.c_str(), _password.c_str());
+
+    // We can use a GET request
+    const char * headerKeys[] = {"Content-Length"};
+    http.collectHeaders(headerKeys, 1);
+    
+    int httpCode = http.GET();
+    bool success = false;
+
+    if (httpCode == HTTP_CODE_OK) {
+        File file = SD_MMC.open(local_path, FILE_WRITE);
+        if (file) {
+            size_t totalSize = 0;
+            if (http.hasHeader("Content-Length")) {
+                totalSize = http.header("Content-Length").toInt();
+            }
+            
+            ProgressWriteStream progressStream(file, totalSize);
+            unsigned long start_time = millis();
+            int bytesWritten = http.writeToStream(&progressStream);
+            unsigned long duration = millis() - start_time;
+            
+            file.close();
+            
+            if (bytesWritten > 0) {
+                success = true;
+                if (duration > 0) {
+                    uint32_t speed_kbps = (bytesWritten * 1000) / duration / 1024;
+                    g_dash_state.download_speed_kbps = speed_kbps;
+                }
+                stick_log_printf("[webdav] Download success! (%d bytes)\n", bytesWritten);
+            } else {
+                stick_log_printf("[webdav] Download failed to write any bytes.\n");
+            }
+        } else {
+            stick_log_printf("[webdav] Failed to open local file for write: %s\n", local_path);
+        }
+    } else {
+        stick_log_printf("[webdav] GET failed. HTTP Code: %d, Error: %s\n", httpCode, http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
     return success;
 }

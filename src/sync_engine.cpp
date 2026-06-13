@@ -2,7 +2,9 @@
 #include "logger.h"
 #include "SD_MMC.h"
 #include "lcd.h"
+#include <WiFi.h>
 #include <map>
+#include <vector>
 
 // Global dashboard state defined in main.cpp
 extern DashboardState g_dash_state;
@@ -28,7 +30,13 @@ void SyncEngine::begin() {
 }
 
 void SyncEngine::run() {
-    // 1. Check server connection
+    // 1. Wait for WiFi to be connected before attempting anything cloud-related.
+    if (WiFi.status() != WL_CONNECTED) {
+        stick_log_printf("[sync] WiFi not connected yet. Waiting...\n");
+        return;
+    }
+
+    // 2. Check server connection
     bool connected = _client->check_connection();
     g_dash_state.server_connected = connected;
 
@@ -43,6 +51,9 @@ void SyncEngine::run() {
 
     // 3. Upload pending files
     upload_pending_files();
+
+    // 4. Download remote files
+    download_remote_files();
 }
 
 void SyncEngine::scan_directory(const char* dir_path) {
@@ -76,6 +87,11 @@ void SyncEngine::scan_directory(const char* dir_path) {
 }
 
 void SyncEngine::check_file(const String& path, size_t current_size) {
+    // Skip files that exceed the max size limit
+    if (_config.max_file_size_mb > 0 && current_size > (size_t)_config.max_file_size_mb * 1024 * 1024) {
+        stick_log_printf("[sync] Skipping (too large, %u MB limit): %s\n", _config.max_file_size_mb, path.c_str());
+        return;
+    }
     auto it = _file_states.find(path);
     
     if (it == _file_states.end()) {
@@ -147,20 +163,104 @@ void SyncEngine::upload_pending_files() {
     g_dash_state.sync_current_file = 0;
 }
 
+void SyncEngine::download_remote_files() {
+    std::vector<RemoteFile> remote_files;
+    stick_log_printf("[sync] Listing remote files...\n");
+    // Pass empty string as root — server_url already points to the user's home dir.
+    // Passing "/" would result in a double-slash in the URL.
+    if (!_client->list_files("", remote_files)) {
+        return;
+    }
+
+    std::vector<RemoteFile> to_download;
+    for (const auto& rf : remote_files) {
+        if (rf.name.startsWith(".")) continue;
+
+        // Skip files exceeding the max size limit
+        if (_config.max_file_size_mb > 0 && rf.size > (size_t)_config.max_file_size_mb * 1024 * 1024) {
+            stick_log_printf("[sync] Skipping remote (too large): %s\n", rf.name.c_str());
+            continue;
+        }
+
+        String local_path = "/" + rf.name;
+        
+        // Does it exist locally?
+        File f = SD_MMC.open(local_path.c_str(), FILE_READ);
+        if (!f) {
+            to_download.push_back(rf);
+        } else {
+            size_t local_size = f.size();
+            f.close();
+            
+            // If we have a pending local change, DON'T OVERWRITE it!
+            auto it = _file_states.find(local_path);
+            if (it != _file_states.end() && !it->second.uploaded) {
+                continue;
+            }
+
+            // Only download if sizes differ
+            if (local_size != rf.size) {
+                to_download.push_back(rf);
+            }
+        }
+    }
+
+    g_dash_state.sync_total_files = to_download.size();
+    if (g_dash_state.sync_total_files == 0) {
+        return;
+    }
+
+    g_dash_state.is_syncing = true;
+    for (size_t i = 0; i < to_download.size(); ++i) {
+        g_dash_state.sync_current_file = i + 1;
+        const RemoteFile& rf = to_download[i];
+        String local_path = "/" + rf.name;
+        String remote_path = rf.name;
+
+        stick_log_printf("[sync] Downloading: %s (%u bytes)\n", rf.name.c_str(), rf.size);
+        strncpy(g_dash_state.last_action, "Downloading...", sizeof(g_dash_state.last_action));
+
+        if (_client->download_file(remote_path.c_str(), local_path.c_str())) {
+            // Register it in _file_states so we don't immediately re-upload it
+            FileState fs;
+            fs.last_size = rf.size;
+            fs.last_changed_time = millis();
+            fs.uploaded = true; // It's in sync with the cloud
+            _file_states[local_path] = fs;
+            
+            strncpy(g_dash_state.last_action, "Download OK", sizeof(g_dash_state.last_action));
+        } else {
+            stick_log_printf("[sync] Download failed: %s\n", rf.name.c_str());
+            strncpy(g_dash_state.last_action, "Download Failed", sizeof(g_dash_state.last_action));
+        }
+    }
+    
+    g_dash_state.is_syncing = false;
+    g_dash_state.sync_total_files = 0;
+    g_dash_state.sync_current_file = 0;
+}
+
 // FreeRTOS Task
 static void sync_task_func(void* pvParameters) {
     SyncEngine* engine = static_cast<SyncEngine*>(pvParameters);
     engine->begin();
 
-    // Since _config is copied into engine, we don't have direct access.
-    // Let's assume a default delay, but we'll wake up more frequently to check settle times.
-    // E.g., wake up every 2 seconds to check if files are ready to upload.
     while (1) {
-        engine->run();
-        // Delay for a short period before scanning again. 
-        // In a real app we might only do check_connection() every sync_interval, 
-        // but scan SD card more frequently. For now we sleep 5s.
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        // run() returns early if WiFi isn't connected yet.
+        // Retry quickly (every 10s) until we get a successful sync,
+        // then switch to the full interval.
+        bool synced = false;
+        while (!synced) {
+            engine->run();
+            // If WiFi + server connected we ran a full cycle
+            if (WiFi.status() == WL_CONNECTED) {
+                synced = true;
+            } else {
+                vTaskDelay(pdMS_TO_TICKS(10000)); // retry every 10s while waiting for WiFi
+            }
+        }
+        // Full sync done — wait the configured interval before the next one
+        vTaskDelay(pdMS_TO_TICKS(engine->get_sync_interval_ms()));
     }
 }
 

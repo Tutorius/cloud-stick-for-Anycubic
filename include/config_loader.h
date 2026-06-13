@@ -3,7 +3,7 @@
 #include <Arduino.h>
 
 struct CloudConfig {
-    bool is_valid; // true if config was loaded and doesn't contain template values
+    bool is_valid;
     String ssid;
     String wifi_password;
     String server_url;
@@ -11,6 +11,7 @@ struct CloudConfig {
     String password;
     uint32_t sync_interval_s;
     uint32_t settle_time_s;
+    uint32_t max_file_size_mb; // 0 = no limit
 };
 
 // Loads the configuration from the SD card.
