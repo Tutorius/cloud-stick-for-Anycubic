@@ -7,4 +7,4 @@
 void log_init();
 
 // Logs a formatted message to both USBSerial and the log file on the SD card.
-void log_printf(const char* format, ...);
+void stick_log_printf(const char* format, ...);

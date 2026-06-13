@@ -56,13 +56,13 @@ void setup() {
     // Initialize logger to SD card
     log_init();
 
-    log_printf("[main] Storage and USB initialized.\n");
+    stick_log_printf("[main] Storage and USB initialized.\n");
 
     // Load configuration from SD card
     CloudConfig config = load_config_from_sd();
 
     if (config.is_valid) {
-        log_printf("[main] Connecting to WiFi SSID: %s\n", config.ssid.c_str());
+        stick_log_printf("[main] Connecting to WiFi SSID: %s\n", config.ssid.c_str());
         lcd_show_text("Connecting WiFi...");
         
         WiFi.begin(config.ssid.c_str(), config.wifi_password.c_str());
@@ -73,22 +73,22 @@ void setup() {
         while (WiFi.status() != WL_CONNECTED && elapsed < timeout_ms) {
             delay(500);
             elapsed += 500;
-            log_printf(".");
+            stick_log_printf(".");
         }
-        log_printf("\n");
+        stick_log_printf("\n");
 
         if (WiFi.status() == WL_CONNECTED) {
-            log_printf("[main] WiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
+            stick_log_printf("[main] WiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
             lcd_show_text("WiFi Connected!");
             delay(1000); // Let the user read the status
             lcd_show_text(WiFi.localIP().toString().c_str());
         } else {
-            log_printf("[main] WiFi connection timed out.\n");
+            stick_log_printf("[main] WiFi connection timed out.\n");
             lcd_show_error("WiFi Failed.");
         }
         delay(2000); // Let the user read the status
     } else {
-        log_printf("[main] Skipping WiFi connection.\n");
+        stick_log_printf("[main] Skipping WiFi connection.\n");
     }
 
     // Start background internet checker
@@ -102,7 +102,7 @@ void setup() {
     strcpy(g_dash_state.last_action, "Ready.");
     lcd_dashboard_update(g_dash_state);
 
-    log_printf("[main] Setup complete.\n");
+    stick_log_printf("[main] Setup complete.\n");
 }
 
 void loop() {

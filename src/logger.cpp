@@ -23,7 +23,7 @@ void log_init() {
     }
 }
 
-void log_printf(const char* format, ...) {
+void stick_log_printf(const char* format, ...) {
     char buf[256];
     va_list args;
     va_start(args, format);

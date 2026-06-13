@@ -23,17 +23,17 @@ CloudConfig load_config_from_sd() {
 
     // Ensure directory exists
     if (!SD_MMC.exists(CONFIG_DIR)) {
-        log_printf("[config] Directory %s not found. Creating...\n", CONFIG_DIR);
+        stick_log_printf("[config] Directory %s not found. Creating...\n", CONFIG_DIR);
         SD_MMC.mkdir(CONFIG_DIR);
     }
 
     // Check if the file exists
     if (!SD_MMC.exists(CONFIG_FILENAME)) {
-        log_printf("[config] %s not found. Creating template...\n", CONFIG_FILENAME);
+        stick_log_printf("[config] %s not found. Creating template...\n", CONFIG_FILENAME);
         
         File file = SD_MMC.open(CONFIG_FILENAME, FILE_WRITE);
         if (!file) {
-            log_printf("[config] Failed to create template file!\n");
+            stick_log_printf("[config] Failed to create template file!\n");
             return config;
         }
 
@@ -47,24 +47,24 @@ CloudConfig load_config_from_sd() {
         doc["settle_time_s"] = 2;
         
         if (serializeJson(doc, file) == 0) {
-            log_printf("[config] Failed to write to template file\n");
+            stick_log_printf("[config] Failed to write to template file\n");
         }
         file.close();
-        log_printf("[config] Template file created. Please update it to connect.\n");
+        stick_log_printf("[config] Template file created. Please update it to connect.\n");
         return config; 
     }
 
     // Open file for reading
     File file = SD_MMC.open(CONFIG_FILENAME, FILE_READ);
     if (!file) {
-        log_printf("[config] Failed to open config file for reading\n");
+        stick_log_printf("[config] Failed to open config file for reading\n");
         return config;
     }
 
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, file);
     if (error) {
-        log_printf("[config] deserializeJson() failed: %s\n", error.c_str());
+        stick_log_printf("[config] deserializeJson() failed: %s\n", error.c_str());
         file.close();
         return config;
     }
@@ -81,10 +81,10 @@ CloudConfig load_config_from_sd() {
 
     // Check if the user has changed the template
     if (config.ssid == TEMPLATE_SSID || config.ssid.length() == 0 || config.server_url == TEMPLATE_SERVER) {
-        log_printf("[config] Config still contains template values. Skipping Cloud connection.\n");
+        stick_log_printf("[config] Config still contains template values. Skipping Cloud connection.\n");
         config.is_valid = false;
     } else {
-        log_printf("[config] Cloud config loaded successfully.\n");
+        stick_log_printf("[config] Cloud config loaded successfully.\n");
         config.is_valid = true;
     }
 
