@@ -76,3 +76,6 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+
+T-Dongle-S3

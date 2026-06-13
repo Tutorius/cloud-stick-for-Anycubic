@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 
 /**
  * @file lcd.h
@@ -42,6 +43,35 @@ void lcd_show_error(const char* message);
 void lcd_show_loading();
 
 /**
+ * @brief Display a generic text message centered on the screen.
+ *
+ * @param message Null-terminated string to display.
+ */
+void lcd_show_text(const char* message);
+
+/**
  * @brief Clear the screen to black.
  */
 void lcd_clear();
+
+struct DashboardState {
+    int wifi_signal; // 0=disconnected, 1=low, 2=med, 3=high
+    bool internet_connected;
+    bool sd_mounted;
+    bool is_syncing;
+    uint32_t upload_speed_kbps;
+    uint32_t download_speed_kbps;
+    uint32_t read_speed_kbps;
+    uint32_t write_speed_kbps;
+    char last_action[32];
+};
+
+/**
+ * @brief Initialize the dashboard layout (draws static elements).
+ */
+void lcd_dashboard_init();
+
+/**
+ * @brief Dynamically update the dashboard with new state without flickering.
+ */
+void lcd_dashboard_update(const DashboardState& state);
