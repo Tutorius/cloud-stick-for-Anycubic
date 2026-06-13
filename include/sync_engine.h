@@ -9,7 +9,7 @@ public:
     ~SyncEngine();
 
     /**
-     * @brief Start the background synchronization task.
+     * @brief Load persisted state and log startup info.
      */
     void begin();
 
@@ -20,10 +20,11 @@ public:
     }
 
     /**
-     * @brief Call this from loop() or let the FreeRTOS task run it. 
-     * Since we are using FreeRTOS, the task will just loop this internally.
+     * @brief Run one full sync cycle.
+     * @return true if a complete sync was performed (WiFi + server reachable),
+     *         false if skipped due to no connectivity.
      */
-    void run();
+    bool run();
 
 private:
     CloudClient* _client;
@@ -33,6 +34,9 @@ private:
     void check_file(const String& path, size_t current_size);
     void upload_pending_files();
     void download_remote_files();
+
+    void save_state();
+    void load_state();
 };
 
 // Global function to start the sync engine task

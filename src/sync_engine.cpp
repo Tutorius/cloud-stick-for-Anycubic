@@ -3,6 +3,7 @@
 #include "SD_MMC.h"
 #include "lcd.h"
 #include <WiFi.h>
+#include <ArduinoJson.h>
 #include <map>
 #include <vector>
 
@@ -27,13 +28,14 @@ SyncEngine::~SyncEngine() {}
 void SyncEngine::begin() {
     stick_log_printf("[sync] SyncEngine starting. Interval: %lu s, Settle: %lu s\n", 
         _config.sync_interval_s, _config.settle_time_s);
+    load_state();
 }
 
-void SyncEngine::run() {
+bool SyncEngine::run() {
     // 1. Wait for WiFi to be connected before attempting anything cloud-related.
     if (WiFi.status() != WL_CONNECTED) {
         stick_log_printf("[sync] WiFi not connected yet. Waiting...\n");
-        return;
+        return false;
     }
 
     // 2. Check server connection
@@ -42,18 +44,34 @@ void SyncEngine::run() {
 
     if (!connected) {
         stick_log_printf("[sync] Server not reachable. Skipping sync cycle.\n");
-        return;
+        return false;
     }
 
-    // 2. Scan the SD card
-    stick_log_printf("[sync] Scanning SD card for changes...\n");
+    // 3. First scan — records current sizes & timestamps for any new files
+    stick_log_printf("[sync] Scanning SD card (pass 1)...\n");
     scan_directory("/");
 
-    // 3. Upload pending files
+    // 4. Wait settle time — files being actively written will change size during this window
+    unsigned long settle_ms = _config.settle_time_s * 1000UL;
+    if (settle_ms > 0) {
+        vTaskDelay(pdMS_TO_TICKS(settle_ms));
+    }
+
+    // 5. Second scan — any file whose size changed resets its timer; stable files are now eligible
+    stick_log_printf("[sync] Scanning SD card (pass 2)...\n");
+    scan_directory("/");
+
+    // 6. Upload files that didn't change during the settle window
     upload_pending_files();
 
-    // 4. Download remote files
+    // 7. Download files from cloud
     download_remote_files();
+
+    // 8. Clear speeds when idle so the display doesn't show stale values
+    g_dash_state.upload_speed_kbps = 0;
+    g_dash_state.download_speed_kbps = 0;
+
+    return true;
 }
 
 void SyncEngine::scan_directory(const char* dir_path) {
@@ -161,6 +179,7 @@ void SyncEngine::upload_pending_files() {
     g_dash_state.is_syncing = false;
     g_dash_state.sync_total_files = 0;
     g_dash_state.sync_current_file = 0;
+    save_state();
 }
 
 void SyncEngine::download_remote_files() {
@@ -238,6 +257,69 @@ void SyncEngine::download_remote_files() {
     g_dash_state.is_syncing = false;
     g_dash_state.sync_total_files = 0;
     g_dash_state.sync_current_file = 0;
+    save_state();
+}
+
+static const char* STATE_FILE = "/.cloud-stick/sync_state.json";
+
+void SyncEngine::save_state() {
+    File file = SD_MMC.open(STATE_FILE, FILE_WRITE);
+    if (!file) {
+        stick_log_printf("[sync] Failed to open state file for writing\n");
+        return;
+    }
+    // Each entry: path -> {size, uploaded}
+    // Use a streaming approach so we don't blow the heap with a huge JsonDocument.
+    file.print("{");
+    bool first = true;
+    for (const auto& pair : _file_states) {
+        if (!first) file.print(",");
+        first = false;
+        // Manually escape the key (paths shouldn't have quotes but be safe)
+        file.printf("\"%s\":{\"s\":%u,\"u\":%d}",
+            pair.first.c_str(),
+            (unsigned)pair.second.last_size,
+            pair.second.uploaded ? 1 : 0);
+    }
+    file.print("}");
+    file.close();
+    stick_log_printf("[sync] State saved (%d files tracked)\n", (int)_file_states.size());
+}
+
+void SyncEngine::load_state() {
+    if (!SD_MMC.exists(STATE_FILE)) {
+        stick_log_printf("[sync] No persisted state found, starting fresh.\n");
+        return;
+    }
+    File file = SD_MMC.open(STATE_FILE, FILE_READ);
+    if (!file) {
+        stick_log_printf("[sync] Failed to open state file for reading\n");
+        return;
+    }
+    // Determine file size so we can allocate appropriately
+    size_t fileSize = file.size();
+    // ArduinoJson filter: accept only what we need
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    if (err) {
+        stick_log_printf("[sync] Failed to parse state file: %s\n", err.c_str());
+        return;
+    }
+    int loaded = 0;
+    for (JsonPair kv : doc.as<JsonObject>()) {
+        String path = kv.key().c_str();
+        FileState fs;
+        fs.last_size = kv.value()["s"] | (size_t)0;
+        fs.uploaded  = kv.value()["u"] | 0;
+        // last_changed_time is millis-based and doesn't survive reboots.
+        // Set to 0 so that any un-uploaded file is immediately eligible
+        // (millis() - 0 > settle_ms is always true after a few ms).
+        fs.last_changed_time = 0;
+        _file_states[path] = fs;
+        loaded++;
+    }
+    stick_log_printf("[sync] Loaded %d tracked files from state.\n", loaded);
 }
 
 // FreeRTOS Task
@@ -246,21 +328,16 @@ static void sync_task_func(void* pvParameters) {
     engine->begin();
 
     while (1) {
-        // run() returns early if WiFi isn't connected yet.
-        // Retry quickly (every 10s) until we get a successful sync,
-        // then switch to the full interval.
-        bool synced = false;
-        while (!synced) {
-            engine->run();
-            // If WiFi + server connected we ran a full cycle
-            if (WiFi.status() == WL_CONNECTED) {
-                synced = true;
-            } else {
-                vTaskDelay(pdMS_TO_TICKS(10000)); // retry every 10s while waiting for WiFi
-            }
+        // run() returns false if WiFi or server is not yet reachable.
+        // Poll every 10 seconds until we complete a full sync cycle,
+        // then switch to the configured interval.
+        bool success = engine->run();
+        if (!success) {
+            vTaskDelay(pdMS_TO_TICKS(10000)); // retry every 10s
+        } else {
+            // Full sync done — wait the configured interval before next cycle
+            vTaskDelay(pdMS_TO_TICKS(engine->get_sync_interval_ms()));
         }
-        // Full sync done — wait the configured interval before the next one
-        vTaskDelay(pdMS_TO_TICKS(engine->get_sync_interval_ms()));
     }
 }
 
