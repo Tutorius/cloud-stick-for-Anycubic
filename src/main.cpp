@@ -11,6 +11,8 @@
 #include "lcd.h"
 #include "config_loader.h"
 #include "logger.h"
+#include "webdav_client.h"
+#include "sync_engine.h"
 
 // Global dashboard state
 DashboardState g_dash_state = {0};
@@ -20,12 +22,12 @@ void internet_check_task(void *pvParameters) {
     WiFiClient client;
     while (1) {
         if (WiFi.status() == WL_CONNECTED) {
-            // Signal strength mapping (rough estimation)
             int32_t rssi = WiFi.RSSI();
-            if (rssi > -60) g_dash_state.wifi_signal = 3;
-            else if (rssi > -75) g_dash_state.wifi_signal = 2;
-            else if (rssi > -90) g_dash_state.wifi_signal = 1;
-            else g_dash_state.wifi_signal = 0;
+            if (rssi != 0) { // Ignore 0 which is often a transient read error
+                if (rssi > -60) g_dash_state.wifi_signal = 3;
+                else if (rssi > -75) g_dash_state.wifi_signal = 2;
+                else g_dash_state.wifi_signal = 1; // 1 bar for weak signal, NO strike
+            }
 
             // Ping google DNS to check real internet access
             if (client.connect("8.8.8.8", 53)) {
@@ -35,7 +37,7 @@ void internet_check_task(void *pvParameters) {
                 g_dash_state.internet_connected = false;
             }
         } else {
-            g_dash_state.wifi_signal = 0;
+            g_dash_state.wifi_signal = 0; // 0 draws the strike
             g_dash_state.internet_connected = false;
         }
         vTaskDelay(pdMS_TO_TICKS(5000)); // check every 5 seconds
@@ -61,38 +63,24 @@ void setup() {
     // Load configuration from SD card
     CloudConfig config = load_config_from_sd();
 
-    if (config.is_valid) {
-        stick_log_printf("[main] Connecting to WiFi SSID: %s\n", config.ssid.c_str());
-        lcd_show_text("Connecting WiFi...");
-        
+    // Connect to WiFi (Asynchronous)
+    if (config.is_valid && config.ssid.length() > 0) {
+        stick_log_printf("[main] Connecting to WiFi: %s (async)\n", config.ssid.c_str());
         WiFi.begin(config.ssid.c_str(), config.wifi_password.c_str());
-        
-        // Wait for connection with a timeout (e.g. 10 seconds)
-        int timeout_ms = 10000;
-        int elapsed = 0;
-        while (WiFi.status() != WL_CONNECTED && elapsed < timeout_ms) {
-            delay(500);
-            elapsed += 500;
-            stick_log_printf(".");
-        }
-        stick_log_printf("\n");
-
-        if (WiFi.status() == WL_CONNECTED) {
-            stick_log_printf("[main] WiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
-            lcd_show_text("WiFi Connected!");
-            delay(1000); // Let the user read the status
-            lcd_show_text(WiFi.localIP().toString().c_str());
-        } else {
-            stick_log_printf("[main] WiFi connection timed out.\n");
-            lcd_show_error("WiFi Failed.");
-        }
-        delay(2000); // Let the user read the status
+        // ESP32 WiFi will connect in the background and auto-reconnect.
+        // The dashboard will show the disconnected state until it successfully connects.
     } else {
         stick_log_printf("[main] Skipping WiFi connection.\n");
     }
 
     // Start background internet checker
     xTaskCreate(internet_check_task, "InternetCheck", 4096, NULL, 1, NULL);
+
+    if (config.is_valid) {
+        // Instantiate the cloud client and start the sync engine
+        CloudClient* cloud_client = new WebDAVClient(config.server_url, config.username, config.password);
+        start_sync_engine(cloud_client, config);
+    }
 
     // Initialize the static dashboard elements
     lcd_dashboard_init();
@@ -108,24 +96,9 @@ void setup() {
 void loop() {
     static unsigned long last_update = 0;
     
-    // Animate the dashboard every 500ms
+    // Redraw the dashboard every 500ms
     if (millis() - last_update > 500) {
         last_update = millis();
-
-        // Simulate SD reading and writing speeds
-        g_dash_state.read_speed_kbps = random(8000, 16000); // 8-16 MB/s
-        g_dash_state.write_speed_kbps = random(4000, 10000); // 4-10 MB/s
-
-        // Simulate Cloud up/down speeds (only when internet is connected)
-        if (g_dash_state.internet_connected) {
-            g_dash_state.upload_speed_kbps = random(2000, 6000);
-            g_dash_state.download_speed_kbps = random(5000, 15000);
-            g_dash_state.is_syncing = (millis() / 2000) % 2 == 0; // toggle sync icon
-        } else {
-            g_dash_state.upload_speed_kbps = 0;
-            g_dash_state.download_speed_kbps = 0;
-            g_dash_state.is_syncing = false;
-        }
 
         // Draw the updated state to the LCD
         lcd_dashboard_update(g_dash_state);

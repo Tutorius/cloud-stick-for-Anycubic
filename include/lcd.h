@@ -57,12 +57,15 @@ void lcd_clear();
 struct DashboardState {
     int wifi_signal; // 0=disconnected, 1=low, 2=med, 3=high
     bool internet_connected;
+    bool server_connected;
     bool sd_mounted;
     bool is_syncing;
     uint32_t upload_speed_kbps;
     uint32_t download_speed_kbps;
     uint32_t read_speed_kbps;
     uint32_t write_speed_kbps;
+    int sync_current_file;
+    int sync_total_files;
     char last_action[32];
 };
 
