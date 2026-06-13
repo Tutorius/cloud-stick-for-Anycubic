@@ -21,6 +21,20 @@
 void lcd_init();
 
 /**
+ * @brief Display a success message with a green checkmark icon.
+ *
+ * @param message Null-terminated string to display below the icon.
+ */
+void lcd_show_success(const char* message);
+
+/**
+ * @brief Display an error message with a red cross icon.
+ *
+ * @param message Null-terminated string to display below the icon.
+ */
+void lcd_show_error(const char* message);
+
+/**
  * @brief Display the loading splash screen:
  *        Black background, hourglass bitmap on the left,
  *        "Loading..." text in FreeSans9pt7b on the right.
