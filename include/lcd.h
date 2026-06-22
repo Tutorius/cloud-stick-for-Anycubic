@@ -66,7 +66,8 @@ struct DashboardState {
     uint32_t write_speed_kbps;
     int sync_current_file;
     int sync_total_files;
-    char last_action[32];
+    int sync_progress_percent;
+    char last_action[64];
 };
 
 /**

@@ -113,6 +113,7 @@ private:
 
             if (_totalSize > 0) {
                 int percent = (int)(((uint64_t)_bytesRead * 100) / _totalSize);
+                g_dash_state.sync_progress_percent = percent;
                 if (g_dash_state.sync_total_files > 0) {
                     snprintf(g_dash_state.last_action, sizeof(g_dash_state.last_action), 
                              "Uploading %d%% (%d/%d)", percent, g_dash_state.sync_current_file, g_dash_state.sync_total_files);
@@ -168,6 +169,7 @@ private:
 
             if (_totalSize > 0) {
                 int percent = (int)(((uint64_t)_bytesWritten * 100) / _totalSize);
+                g_dash_state.sync_progress_percent = percent;
                 if (g_dash_state.sync_total_files > 0) {
                     snprintf(g_dash_state.last_action, sizeof(g_dash_state.last_action), 
                              "Dn %d%% (%d/%d)", percent, g_dash_state.sync_current_file, g_dash_state.sync_total_files);

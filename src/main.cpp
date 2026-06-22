@@ -121,10 +121,30 @@ void setup() {
 
 void loop() {
     static unsigned long last_update = 0;
+    static unsigned long upload_start_time = 0;
+    static String last_logged_action = "";
     
     // Redraw the dashboard every 500ms
     if (millis() - last_update > 500) {
         last_update = millis();
+
+        // Watchdog: If an upload gets stuck due to the server silently dropping the 
+        // connection (e.g. 413 Payload Too Large on large files), the TCP window fills up 
+        // and LwIP blocks forever. We detect a frozen progress string and forcefully reset WiFi.
+        if (strncmp(g_dash_state.last_action, "Uploading", 9) == 0) {
+            if (last_logged_action != g_dash_state.last_action) {
+                upload_start_time = millis();
+                last_logged_action = g_dash_state.last_action;
+            } else if (millis() - upload_start_time > 30000) { // 30 seconds stuck on exact same string
+                stick_log_printf("[watchdog] Upload stuck for 30s! Forcing disconnect to unblock.\n");
+                WiFi.disconnect(false);
+                WiFi.reconnect();
+                upload_start_time = millis(); // Reset
+            }
+        } else {
+            last_logged_action = g_dash_state.last_action;
+            upload_start_time = millis();
+        }
 
         // Draw the updated state to the LCD
         lcd_dashboard_update(g_dash_state);
