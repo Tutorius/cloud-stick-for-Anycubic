@@ -4,11 +4,11 @@ An ESP32-S3 powered USB flash drive that automatically syncs its contents with a
 
 Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot and an ST7735 display). [Requirements](#requirements) and [setup instructions](#getting-started) are below.
 
-<div style="align: center;">
-<a href="https://youtu.be/JGqHi-07hUU" target="_blank" style="align: center">
+<p align="center">
+<a href="https://youtu.be/JGqHi-07hUU" target="_blank" alt="Cloud Stick Demo Video" title="Cloud Stick Demo Video on YouTube" align="center">
   <img width="600" alt="Youtube Video" src="https://github.com/user-attachments/assets/ac393934-0c1f-4fc2-84b5-ef8f753996cd" />
 </a>
-</div>
+</p>
 
 ## Features
 
@@ -19,7 +19,7 @@ Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot an
 
 ## Table of Contents
 
-<detail>
+<details>
   <summary>Click to expand</summary>
 
 - [Cloud Stick](#cloud-stick)
@@ -41,7 +41,7 @@ Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot an
   - [License \& Acknowledgements](#license--acknowledgements)
   - [Contributing](#contributing)
 
-</detail>
+</details>
 
 
 ## Getting Started
@@ -190,4 +190,6 @@ But please note that this was planned as a proof-of-concept project to explore t
 
 ***
 
-Made with ❤️ by [JMcrafter26](https://github.com/JMcrafter26)
+<p align="center">
+Made with ❤️ by John aka <a href="https://github.com/JMcrafter26" target="_blank">JMcrafter26</a>
+</p>
