@@ -4,6 +4,12 @@ An ESP32-S3 powered USB flash drive that automatically syncs its contents with a
 
 Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot and an ST7735 display). [Requirements](#requirements) and [setup instructions](#getting-started) are below.
 
+<div style="align: center;">
+<a href="https://youtu.be/JGqHi-07hUU" target="_blank" style="align: center">
+  <img width="600" alt="Youtube Video" src="https://github.com/user-attachments/assets/ac393934-0c1f-4fc2-84b5-ef8f753996cd" />
+</a>
+</div>
+
 ## Features
 
 - **Plug-and-play USB Mass Storage**: Appears as a normal thumb drive to the host PC.
@@ -31,7 +37,9 @@ Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot an
     - [The Sync Engine (`sync_engine.cpp`)](#the-sync-engine-sync_enginecpp)
     - [WebDAV and Memory Limits (`webdav_client.cpp`)](#webdav-and-memory-limits-webdav_clientcpp)
     - [Live Progress \& Watchdogs](#live-progress--watchdogs)
+  - [Known Issues](#known-issues)
   - [License \& Acknowledgements](#license--acknowledgements)
+  - [Contributing](#contributing)
 
 </detail>
 
@@ -41,6 +49,14 @@ Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot an
 ### Requirements
 
 #### Hardware
+
+<table>
+  <tr>
+    <td><img width="200" alt="T-Dongle-S3-1" src="https://github.com/user-attachments/assets/adb9e1cd-3a9b-4806-8a4f-e3e6a0030d50" /></td>
+    <td><img width="200" alt="T-Dongle-S3-2" src="https://github.com/user-attachments/assets/f0ef4fb5-6860-431b-83b3-8b8a09727e76" /></td>
+    <td><img width="200" alt="T-Dongle-S3-3" src="https://github.com/user-attachments/assets/55b31b5f-8e6b-4704-9151-66d8206b2310" /></td>
+    </tr>
+</table>
 
 - LilyGO T-Dongle-S3 (or any ESP32-S3 with an SD card slot and an ST7735 display)
 - MicroSD card (FAT32 formatted)
@@ -105,7 +121,8 @@ Plug it into a USB port. The dashboard will show the boot sequence, connect to W
 
 ## In-Depth Technical Details
 
-If you're looking to modify the code or just curious about how it handles the edge cases of running a cloud sync engine on a microcontroller, here's how the internals work.
+> [!TIP]
+> This section is for developers who want to understand the inner workings of the sync engine, USB mass storage implementation, and how it handles WebDAV interactions given the constraints of the ESP32-S3's memory and processing power.
 
 ### USB Mass Storage (MSC) vs WiFi
 
@@ -141,6 +158,15 @@ To prevent the sync engine from freezing:
 1. The `HTTPClient` is fed via a custom `ProgressStream` that calculates upload/download speeds every 500ms and updates the LCD dashboard.
 2. The main display loop includes a software watchdog. If it detects the upload percentage is frozen for exactly 30 seconds, it forcefully restarts the WiFi interface, cleanly tearing down the hung socket and allowing the sync engine to log a failure and move on.
 
+## Known Issues
+
+One known issue I couldn't fully resolve is that sometimes, it takes multiple attempts to boot the stick and have it successfully connect to WiFi and the WebDAV server.
+
+<!-- It's a hardware circuit inside the ESP32-S3 that constantly monitors the supply voltage (nominally 3.3V). If the voltage drops below a threshold (~2.45V by default), it immediately resets the chip. The idea is: if voltage is too low, the CPU may execute garbage instructions, corrupt RAM, or write corrupt data to flash. A clean reset is safer than undefined behavior.
+Source: Reddit discussion
+-->
+My best guess is that during the initial boot sequence, the CPU is under heavy load trying to connect to WiFi and the WebDAV server, which causes a temporary voltage drop that triggers the brownout detector. After a few attempts, it manages to connect successfully.
+
 ## License & Acknowledgements
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
@@ -155,3 +181,13 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 - **tinyusb-org/tinyusb** - for the USB stack
 - **sbrin/lopaka** - for the dashboard icons and design
 - Inspiration from various WebDAV client implementations and the WebDAV spec (RFC 4918) for handling edge cases in file uploads and directory listings.
+
+## Contributing
+
+Contributions are welcome! If you have suggestions for improvements, bug fixes, or new features, please open an issue or submit a pull request.
+
+But please note that this was planned as a proof-of-concept project to explore the capabilities of the ESP32-S3 and WebDAV. I may not have the bandwidth to implement every feature request, but I'll do my best to review and merge contributions that align with the project's goals.
+
+***
+
+Made with ❤️ by [JMcrafter26](https://github.com/JMcrafter26)
