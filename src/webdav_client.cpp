@@ -60,7 +60,7 @@ extern DashboardState g_dash_state;
 
 class ProgressStream : public Stream {
 public:
-    ProgressStream(File& file, size_t totalSize) : _file(file), _totalSize(totalSize), _bytesRead(0), _lastUpdate(0) {}
+    ProgressStream(File& file, size_t totalSize) : _file(file), _totalSize(totalSize), _bytesRead(0), _lastUpdate(0), _lastBytesRead(0) {}
     
     int available() override { return _file.available(); }
     
@@ -97,10 +97,20 @@ private:
     size_t _totalSize;
     size_t _bytesRead;
     unsigned long _lastUpdate;
+    size_t _lastBytesRead;
     
     void update_progress() {
-        if (millis() - _lastUpdate > 500) { // Update at most every 500ms
-            _lastUpdate = millis();
+        unsigned long now = millis();
+        if (now - _lastUpdate > 500) { // Update at most every 500ms
+            unsigned long duration = now - _lastUpdate;
+            size_t bytes_diff = _bytesRead - _lastBytesRead;
+            _lastUpdate = now;
+            _lastBytesRead = _bytesRead;
+
+            if (duration > 0) {
+                g_dash_state.upload_speed_kbps = (bytes_diff * 1000) / duration / 1024;
+            }
+
             if (_totalSize > 0) {
                 int percent = (int)(((uint64_t)_bytesRead * 100) / _totalSize);
                 if (g_dash_state.sync_total_files > 0) {
@@ -116,7 +126,7 @@ private:
 
 class ProgressWriteStream : public Stream {
 public:
-    ProgressWriteStream(File& file, size_t totalSize) : _file(file), _totalSize(totalSize), _bytesWritten(0), _lastUpdate(0) {}
+    ProgressWriteStream(File& file, size_t totalSize) : _file(file), _totalSize(totalSize), _bytesWritten(0), _lastUpdate(0), _lastBytesWritten(0) {}
     
     int available() override { return 0; }
     int read() override { return -1; }
@@ -142,10 +152,20 @@ private:
     size_t _totalSize;
     size_t _bytesWritten;
     unsigned long _lastUpdate;
+    size_t _lastBytesWritten;
     
     void update_progress() {
-        if (millis() - _lastUpdate > 500) {
-            _lastUpdate = millis();
+        unsigned long now = millis();
+        if (now - _lastUpdate > 500) {
+            unsigned long duration = now - _lastUpdate;
+            size_t bytes_diff = _bytesWritten - _lastBytesWritten;
+            _lastUpdate = now;
+            _lastBytesWritten = _bytesWritten;
+
+            if (duration > 0) {
+                g_dash_state.download_speed_kbps = (bytes_diff * 1000) / duration / 1024;
+            }
+
             if (_totalSize > 0) {
                 int percent = (int)(((uint64_t)_bytesWritten * 100) / _totalSize);
                 if (g_dash_state.sync_total_files > 0) {
@@ -207,7 +227,9 @@ public:
         char c = (char)b;
         if (c == '<') {
             inTag = true;
-            if (inResponse) {
+            // Only process text if the previous tag was an opening tag (not containing "</")
+            if (inResponse && currentTag.indexOf("</") == -1) {
+                currentText.trim(); // Trim whitespace just in case
                 if (currentTag.endsWith("href>")) {
                     currentFile.name = currentText;
                 } else if (currentTag.endsWith("getcontentlength>")) {
