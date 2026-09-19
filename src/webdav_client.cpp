@@ -3,6 +3,10 @@
 #include "SD_MMC.h"
 #include <WiFiClientSecure.h>
 
+extern uint8_t downloaded;
+extern uint32_t clocker;
+
+
 WebDAVClient::WebDAVClient(const String& server_url, const String& username, const String& password)
     : _server_url(server_url), _username(username), _password(password) {
     if (!_server_url.endsWith("/")) {
@@ -424,6 +428,9 @@ bool WebDAVClient::download_file(const char* remote_path, const char* local_path
     if (httpCode == HTTP_CODE_OK) {
         File file = SD_MMC.open(local_path, FILE_WRITE);
         if (file) {
+            downloaded=true;
+            clocker=millis();
+
             size_t totalSize = 0;
             if (http.hasHeader("Content-Length")) {
                 totalSize = http.header("Content-Length").toInt();
@@ -433,6 +440,9 @@ bool WebDAVClient::download_file(const char* remote_path, const char* local_path
             unsigned long start_time = millis();
             int bytesWritten = http.writeToStream(&progressStream);
             unsigned long duration = millis() - start_time;
+
+            downloaded=true;
+            clocker=millis();
             
             file.close();
             
