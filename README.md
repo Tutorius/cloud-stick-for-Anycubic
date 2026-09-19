@@ -16,7 +16,7 @@ Just edit the config.h as follows:
 Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot and an ST7735 display). [Requirements](#requirements) and [setup instructions](#getting-started) are below.
 
 <p align="center">
-<a href="https://youtu.be/JGqHi-07hUU" target="_blank" alt="Cloud Stick Demo Video" title="Cloud Stick Demo Video on YouTube" align="center">
+<a href="https://youtu.be/Po_KXRPRUVo" target="_blank" alt="Cloud Stick for Anycubic Demo Video" title="Cloud Stick for Anycubic Demo Video on YouTube" align="center">
   <img width="600" alt="Youtube Video" src="https://github.com/user-attachments/assets/ac393934-0c1f-4fc2-84b5-ef8f753996cd" />
 </a>
 </p>
