@@ -17,7 +17,6 @@ Just edit the config.h as follows:
 
 Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot and an ST7735 display). [Requirements](#requirements) and [setup instructions](#getting-started) are below.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/Po_KXRPRUVo?si=cRz4dMnj7F2UxdVD" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 ## Features
 
