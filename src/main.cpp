@@ -14,7 +14,8 @@
 #include "webdav_client.h"
 #include "sync_engine.h"
 
-
+uint32_t clocker;
+uint8_t downloaded=false;
 
 // Global dashboard state
 DashboardState g_dash_state = {0};
@@ -148,5 +149,17 @@ void loop() {
 
         // Draw the updated state to the LCD
         lcd_dashboard_update(g_dash_state);
+    }
+
+    // Restart Stick if Download was active (downloaded==true) and las Download-Activity is longer than DELAY_FOR_RESTART ago
+
+    if(downloaded)
+    {
+        if((millis()>clocker+DELAY_FOR_RESTART)&&(DELAY_FOR_RESTART>=1000))
+        {
+            downloaded=false;
+            delay(5000);
+            ESP.restart();
+        }
     }
 }
