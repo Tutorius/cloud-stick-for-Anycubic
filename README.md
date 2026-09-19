@@ -1,6 +1,17 @@
-# Cloud Stick
+# Cloud Stick for Anycubic (and other proprietary USB-Stick capable devices)
 
 An ESP32-S3 powered USB flash drive that automatically syncs its contents with a WebDAV cloud server over WiFi. When plugged into a computer, it mounts as a standard USB mass storage device, but in the background, it continuously uploads new or modified files to a WebDAV server and downloads any changes from the server to the SD card.
+
+Added 09/2026 : Device can be restarted automatically when files are uploaded to the stick.
+Also added: Rotation-value for stick-display, standard is 1, use 3 if stick is plugged in pointing to the right.
+
+Just edit the config.h as follows:
+
+  // TFT-Rotation 1 or 3
+  #define TFT_ROTATION 3
+
+  // DELAY_FOR_RESTART Milliseconds to wait until last upload to restart the unit. A value below 1000 disables this funtionality
+  #define DELAY_FOR_RESTART 5000
 
 Designed for the **LilyGO T-Dongle-S3** (or any ESP32-S3 with an SD card slot and an ST7735 display). [Requirements](#requirements) and [setup instructions](#getting-started) are below.
 
@@ -92,16 +103,35 @@ The stick looks for a configuration file on the SD card.
 
 > The following JSON file will be created automatically on first boot, but you can also create it manually. Place it at `/.cloud-stick/config.json` on the SD card.
 
+Edit: Removed comments, comments are not allowed in json-files
+What do put in in the json-file:
+
+"ssid" : Change "Your_Wifi_Name" to the name of ysour Wifi (SSID)
+
+"wifi_password" : Change "Your_Wifi_Password" to your password you set in your Router
+
+"server_url" : Put in your Webdav-Server. If you use a local Server, it will start with http://127.0.0.1/. Look in your Webdav-server-documentation or try to tell your server how to connect.
+
+"username" : Change "webdav_user" to your user you created in Webdav-server. I have started an Anonymous-server, so i use "guest" here.
+
+"password" : Change the Password to your password for your Webdav-Server. As Anonymous-server, is use "guest" here also.
+
+"sync_interval" : Change the interval to something lower if you want to start a download earlier.
+
+"settle-time_s" : Leave it as it is
+
+"max_file_size_mb" : 0 means no restriction. To avoid upload of to big files, its good to set it to 100 or 1000 (100MB or 1GB), depending on the use and filesize you will create
+
 ```json
 {
     "ssid": "Your_WiFi_Name",
     "wifi_password": "Your_WiFi_Password",
-    "server_url": "http://192.168.1.100/dav.php/@Home", # This is the WebDAV URL of your server. (See below for examples)
+    "server_url": "http://192.168.1.100/dav.php/@Home",
     "username": "webdav_user",
     "password": "webdav_password",
-    "sync_interval_s": 60, # how often to check for changes (in seconds)
-    "settle_time_s": 2, # how long to wait before considering a file safe to upload
-    "max_file_size_mb": 50
+    "sync_interval_s": 60,
+    "settle_time_s": 2,
+    "max_file_size_mb": 0
 }
 ```
 
