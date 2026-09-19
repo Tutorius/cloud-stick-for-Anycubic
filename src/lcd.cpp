@@ -20,9 +20,14 @@
  */
 
 #include "lcd.h"
-
+#include "config.h"
 #include <Arduino.h>
 #include <TFT_eSPI.h> // Bodmer's TFT_eSPI library
+
+extern uint32_t clocker;
+extern uint8_t downloaded;
+
+
 
 // FreeSans9pt7b is already included transitively by TFT_eSPI.h via
 // Fonts/GFXFF/gfxfont.h (line 52) when LOAD_GFXFF=1 is defined.
@@ -121,7 +126,7 @@ void lcd_init() {
   digitalWrite(TFT_BL, LOW); // Active-low backlight on T-Dongle-S3
 
   tft.init();
-  tft.setRotation(1);
+  tft.setRotation(TFT_ROTATION);
   tft.fillScreen(TFT_BLACK);
 }
 
@@ -332,7 +337,9 @@ void lcd_dashboard_update(const DashboardState &state) {
   }
 }
 
-void lcd_show_loading() { lcd_show_state("loading"); }
+void lcd_show_loading() {
+  lcd_show_state("loading");
+}
 
 void lcd_clear() { tft.fillScreen(TFT_BLACK); }
 
