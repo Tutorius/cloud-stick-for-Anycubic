@@ -18,3 +18,9 @@
 // LED Pins
 #define LED_DI_PIN     40
 #define LED_CI_PIN     39
+
+// TFT-Rotation
+#define TFT_ROTATION 3
+
+// DELAY_FOR_RESTART
+#define DELAY_FOR_RESTART 5000
