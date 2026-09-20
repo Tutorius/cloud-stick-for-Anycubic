@@ -1,8 +1,6 @@
-
-
 # Cloud Stick for Anycubic (and other proprietary USB-Stick capable devices)
 
-This fork was made from the cloud-stick-dfgdfg by John aka <a href="https://github.com/JMcrafter26" target="_blank">JMcrafter26</a>
+This fork was made from the cloud-stick-repository by John aka <a href="https://github.com/JMcrafter26" target="_blank">JMcrafter26</a>
 His work has much inside that i am not capable of. I can program C, not C++, and much of the original is taken without any change.
 Thanks for your work, John!
 
@@ -108,7 +106,7 @@ The stick looks for a configuration file on the SD card.
 
 > The following JSON file will be created automatically on first boot, but you can also create it manually. Place it at `/.cloud-stick/config.json` on the SD card.
 
-Edit by Rutorius: Removed comments, comments are not allowed in json-files
+( Edit by Tutorius: Removed comments, comments are not allowed in json-files )
 What do put in in the json-file:
 
 "ssid" : Change "Your_Wifi_Name" to the name of ysour Wifi (SSID)
