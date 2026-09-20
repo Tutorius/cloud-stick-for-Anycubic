@@ -2,6 +2,14 @@
 
 # Cloud Stick for Anycubic (and other proprietary USB-Stick capable devices)
 
+This fork was made from the cloud-stick-dfgdfg by John aka <a href="https://github.com/JMcrafter26" target="_blank">JMcrafter26</a>
+His work has much inside that i am not capable of. I can program C, not C++, and much of the original is taken without any change.
+Thanks for your work, John!
+
+The fork was needed cause the stick with the original software had its problems on proprietary hardware. It may be that some PCs can recognize a external write to an USB-stick, but a black box like an Anycubic Kobra-printer can not.
+So this version here has minor changes, so you can rotate the display by changing a parameter in the config.h-file, and the time to restart the unit can also be defined there. The restart forces the printer (in my case) to remount the stick.
+So you can print on such a device without using cloud-solution where your data is transfered to somewhere you are not knowing what is made with it.
+
 An ESP32-S3 powered USB flash drive that automatically syncs its contents with a WebDAV cloud server over WiFi. When plugged into a computer, it mounts as a standard USB mass storage device, but in the background, it continuously uploads new or modified files to a WebDAV server and downloads any changes from the server to the SD card.
 
 Added 09/2026 : Device can be restarted automatically when files are uploaded to the stick.
@@ -100,7 +108,7 @@ The stick looks for a configuration file on the SD card.
 
 > The following JSON file will be created automatically on first boot, but you can also create it manually. Place it at `/.cloud-stick/config.json` on the SD card.
 
-Edit: Removed comments, comments are not allowed in json-files
+Edit by Rutorius: Removed comments, comments are not allowed in json-files
 What do put in in the json-file:
 
 "ssid" : Change "Your_Wifi_Name" to the name of ysour Wifi (SSID)
@@ -139,6 +147,10 @@ The `server_url` varies depending on the WebDAV server software you are using.
 For example, Nextcloud uses `https://yourdomain.com/remote.php/dav/files/username/` and FileRun uses `http://yourdomain.com/dav.php/@Home`. Check your server's documentation for the correct URL.
 
 > Also, make sure the WebDAV server and path is accessible from the ESP32-S3's WiFi network
+
+Edit by Tutorius: I am running a webdav-server on my linux with "wsgidav". Is share one directory, and its mouinted to the servers root. So my Webdav-url is "http://192.168.20.25:8080/". I have installed the server as anonymous, so i use "guest" as username and password.
+For a stick used on a 3D-printer, the "sync_interval" should be soort, i have set it to 20 seconds. Normally you slice a 3D-objects and put it to the Webdav-directory, you want fast reaction on the stick.
+The restart-wait-time (in the config.h-file) is also set to a short delay of 5000 Milliseconds in my case.
 
 ### 3. Usage
 
