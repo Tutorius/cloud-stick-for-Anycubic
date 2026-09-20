@@ -8,6 +8,8 @@ The fork was needed cause the stick with the original software had its problems 
 So this version here has minor changes, so you can rotate the display by changing a parameter in the config.h-file, and the time to restart the unit can also be defined there. The restart forces the printer (in my case) to remount the stick.
 So you can print on such a device without using cloud-solution where your data is transfered to somewhere you are not knowing what is made with it.
 
+## Description
+
 An ESP32-S3 powered USB flash drive that automatically syncs its contents with a WebDAV cloud server over WiFi. When plugged into a computer, it mounts as a standard USB mass storage device, but in the background, it continuously uploads new or modified files to a WebDAV server and downloads any changes from the server to the SD card.
 
 Added 09/2026 : Device can be restarted automatically when files are uploaded to the stick.
