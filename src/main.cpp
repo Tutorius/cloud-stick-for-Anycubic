@@ -158,7 +158,8 @@ void loop() {
         if((millis()>clocker+DELAY_FOR_RESTART)&&(DELAY_FOR_RESTART>=1000))
         {
             downloaded=false;
-            delay(5000);
+            end_usb_storage();
+            delay(1000);
             ESP.restart();
         }
     }
