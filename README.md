@@ -206,7 +206,7 @@ My best guess is that during the initial boot sequence, the CPU is under heavy l
 
 ## License & Acknowledgements
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the LICENSE page for details. ( https://opensource.org/license/mit )
 
 **Acknowledgements:**
 
