@@ -1,11 +1,21 @@
 #include "webdav_client.h"
 #include "logger.h"
 #include "SD_MMC.h"
+#include "config_loader.h"
 #include <WiFiClientSecure.h>
+#include "lcd.h"
+#include "config.h"
 
-extern uint8_t downloaded;
-extern uint32_t clocker;
+// Variables for restart after download (Look in config.h for the time to wait before restart the stick, DELAY_FOR_RESTART )
+extern uint8_t downloaded; 
+extern uint32_t clocker; 
 
+// variables for restart and deleteall started by restar.cmd or deleteall.cmd -files
+extern uint8_t restart;
+extern uint8_t deleteall;
+
+// ***
+extern CloudConfig config;
 
 WebDAVClient::WebDAVClient(const String& server_url, const String& username, const String& password)
     : _server_url(server_url), _username(username), _password(password) {
@@ -16,7 +26,8 @@ WebDAVClient::WebDAVClient(const String& server_url, const String& username, con
 
 WebDAVClient::~WebDAVClient() {}
 
-bool WebDAVClient::check_connection() {
+bool WebDAVClient::check_connection() 
+{
     HTTPClient http;
     // We can use PROPFIND with depth 0 to check if the root URL is accessible.
     http.begin(_server_url);
@@ -39,7 +50,8 @@ bool WebDAVClient::check_connection() {
     return success;
 }
 
-String WebDAVClient::urlEncode(const char* msg) {
+String WebDAVClient::urlEncode(const char* msg) 
+{
     const char *hex = "0123456789ABCDEF";
     String encodedMsg = "";
     while (*msg != '\0') {
@@ -58,7 +70,6 @@ String WebDAVClient::urlEncode(const char* msg) {
     return encodedMsg;
 }
 
-#include "lcd.h"
 
 extern DashboardState g_dash_state;
 
@@ -89,7 +100,8 @@ public:
         return n;
     }
 
-    size_t readBytes(uint8_t *buffer, size_t length) override {
+    size_t readBytes(uint8_t *buffer, size_t length) override 
+    {
         size_t n = _file.read(buffer, length);
         _bytesRead += n;
         update_progress();
@@ -103,7 +115,8 @@ private:
     unsigned long _lastUpdate;
     size_t _lastBytesRead;
     
-    void update_progress() {
+    void update_progress() 
+    {
         unsigned long now = millis();
         if (now - _lastUpdate > 500) { // Update at most every 500ms
             unsigned long duration = now - _lastUpdate;
@@ -111,11 +124,13 @@ private:
             _lastUpdate = now;
             _lastBytesRead = _bytesRead;
 
-            if (duration > 0) {
+            if (duration > 0) 
+            {
                 g_dash_state.upload_speed_kbps = (bytes_diff * 1000) / duration / 1024;
             }
 
-            if (_totalSize > 0) {
+            if (_totalSize > 0) 
+            {
                 int percent = (int)(((uint64_t)_bytesRead * 100) / _totalSize);
                 g_dash_state.sync_progress_percent = percent;
                 if (g_dash_state.sync_total_files > 0) {
@@ -129,7 +144,8 @@ private:
     }
 };
 
-class ProgressWriteStream : public Stream {
+class ProgressWriteStream : public Stream 
+{
 public:
     ProgressWriteStream(File& file, size_t totalSize) : _file(file), _totalSize(totalSize), _bytesWritten(0), _lastUpdate(0), _lastBytesWritten(0) {}
     
@@ -281,12 +297,17 @@ public:
 };
 
 bool WebDAVClient::upload_file(const char* local_path, const char* remote_path) {
+    
     File file = SD_MMC.open(local_path, FILE_READ);
+    #ifndef NOUPLOAD
     if (!file) {
         stick_log_printf("[webdav] Failed to open local file for upload: %s\n", local_path);
         return false;
     }
-
+    #else
+    return true;
+    exit;
+    #endif
     size_t fileSize = file.size();
     
     // Construct the remote URL. 
@@ -410,6 +431,27 @@ bool WebDAVClient::download_file(const char* remote_path, const char* local_path
     if (!url.endsWith("/")) url += "/";
     url += encodedPath;
 
+    if(strcmp(remote_path,"restart.cmd")==0)
+    {
+        stick_log_printf("[webdav] restart.cmd found\n");
+        restart=true;
+        webdavDeleteFile("restart.cmd",false);
+        stick_log_printf("[webdav] restart.cmd deleted\n");
+
+        return true;
+        exit;
+    }
+    if(strcmp(remote_path,"deleteall.cmd")==0)
+    {
+        stick_log_printf("[webdav] deleteall.cmd XXX\n");
+        deleteall=true;
+        webdavDeleteFile("deleteall.cmd",false);
+
+        return true;
+        exit;
+    }
+    
+    
     stick_log_printf("[webdav] Downloading %s to %s\n", url.c_str(), local_path);
 
     HTTPClient http;
@@ -428,9 +470,10 @@ bool WebDAVClient::download_file(const char* remote_path, const char* local_path
     if (httpCode == HTTP_CODE_OK) {
         File file = SD_MMC.open(local_path, FILE_WRITE);
         if (file) {
-            downloaded=true;
+            if (downloaded==0) downloaded++;
+            if (downloaded==2) downloaded--;
             clocker=millis();
-
+            
             size_t totalSize = 0;
             if (http.hasHeader("Content-Length")) {
                 totalSize = http.header("Content-Length").toInt();
@@ -441,16 +484,18 @@ bool WebDAVClient::download_file(const char* remote_path, const char* local_path
             int bytesWritten = http.writeToStream(&progressStream);
             unsigned long duration = millis() - start_time;
 
-            downloaded=true;
-            clocker=millis();
             
             file.close();
+            
+            downloaded++;
+            clocker=millis();
             
             if (bytesWritten > 0) {
                 success = true;
                 if (duration > 0) {
                     uint32_t speed_kbps = (bytesWritten * 1000) / duration / 1024;
                     g_dash_state.download_speed_kbps = speed_kbps;
+                    clocker=millis();
                 }
                 stick_log_printf("[webdav] Download success! (%d bytes)\n", bytesWritten);
             } else {
@@ -465,4 +510,191 @@ bool WebDAVClient::download_file(const char* remote_path, const char* local_path
 
     http.end();
     return success;
+}
+
+String urlEncode(const char* msg) {
+    const char *hex = "0123456789ABCDEF";
+    String encodedMsg = "";
+    while (*msg != '\0') {
+        if ( ('a' <= *msg && *msg <= 'z')
+             || ('A' <= *msg && *msg <= 'Z')
+             || ('0' <= *msg && *msg <= '9')
+             || *msg == '-' || *msg == '_' || *msg == '.' || *msg == '~' ) {
+            encodedMsg += *msg;
+        } else {
+            encodedMsg += '%';
+            encodedMsg += hex[*msg >> 4];
+            encodedMsg += hex[*msg & 15];
+        }
+        msg++;
+    }
+    return encodedMsg;
+}
+
+//#define ENCODE
+
+bool webdavDeleteFile(const char* remote_path,boolean complete)
+{
+    const String fileUrl; 
+    HTTPClient http;
+    
+    String encodedPath = "";
+    const char* p = remote_path;
+    if(!complete)
+    {
+        while (*p != '\0') {
+            if (*p == '/') {
+                encodedPath += '/';
+                p++;
+            } else {
+                const char* start = p;
+                while (*p != '\0' && *p != '/') p++;
+                String segment = String(start).substring(0, p - start);
+                encodedPath += urlEncode(segment.c_str());
+            }
+        }
+    }
+    String url;
+    url="";
+    if(!complete)
+        url += config.server_url + encodedPath;
+    else
+        url += p;
+    
+
+
+    http.begin(config.server_url);
+    http.setAuthorization(config.username.c_str(), config.password.c_str());
+    http.addHeader("Depth", "0");
+    http.addHeader("Content-Type", "application/xml");
+
+    // Some servers require a body for PROPFIND, but an empty body is often fine for depth 0.
+    // fileUrl ist z.B. "http://192.168.178.45:8080/restart.cmd"
+    http.begin(url);
+    int httpCode = http.sendRequest("DELETE");
+    
+    bool success = false;
+    if (httpCode == HTTP_CODE_OK || httpCode == 204)
+    {
+        success=true;;
+    }
+    
+     stick_log_printf("+++ DeleteDAV-File %s +++\n",url.c_str());
+
+    return success;
+}
+
+bool list_files(const char* remote_dir, std::vector<RemoteFile>& files) {
+    String url = config.server_url;
+    if (!url.endsWith("/")) {
+        url += "/";
+    }
+    
+    /*String encodedPath = "";
+    const char* p = remote_dir;
+    while (*p != '\0') {
+        if (*p == '/') {
+            encodedPath += '/';
+            p++;
+        } else {
+            const char* start = p;
+            while (*p != '\0' && *p != '/') p++;
+            String segment = String(start).substring(0, p - start);
+            encodedPath += urlEncode(segment.c_str());
+        }
+    }
+    url += encodedPath;
+    */
+    stick_log_printf("[webdav] Listing files at %s\n", url.c_str());
+
+    HTTPClient http;
+    http.setTimeout(20000);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.begin(url);
+    http.setAuthorization(config.username.c_str(), config.password.c_str());
+    http.addHeader("Depth", "1");
+    
+    String propfindXML = "<?xml version=\"1.0\"?>\n"
+                         "<d:propfind xmlns:d=\"DAV:\">\n"
+                         "  <d:prop>\n"
+                         "    <d:getlastmodified/>\n"
+                         "    <d:getcontentlength/>\n"
+                         "    <d:resourcetype/>\n"
+                         "  </d:prop>\n"
+                         "</d:propfind>";
+
+    int httpCode = http.sendRequest("PROPFIND", propfindXML);
+    bool success = false;
+    
+    if (httpCode == 207) {
+        XMLParserStream parser(files);
+        http.writeToStream(&parser);
+        success = true;
+        stick_log_printf("[webdav] Found %d files.\n", files.size());
+    } else {
+        stick_log_printf("[webdav] PROPFIND failed. HTTP Code: %d\n", httpCode);
+    }
+    http.end();
+    return success;
+}
+
+bool webdavDeleteAll()
+{
+    const String fileUrl; 
+    HTTPClient http;
+    
+    String encodedPath = "";
+    
+    String url = config.server_url + encodedPath;
+    
+    http.begin(config.server_url);
+    http.setAuthorization(config.username.c_str(), config.password.c_str());
+    http.addHeader("Depth", "0");
+    http.addHeader("Content-Type", "application/xml");
+
+    // Some servers require a body for PROPFIND, but an empty body is often fine for depth 0.
+    // fileUrl ist z.B. "http://192.168.178.45:8080/restart.cmd"
+    
+    bool success = false;
+
+    std::vector<RemoteFile> List;
+    list_files(url.c_str(), List);
+    for (const RemoteFile& fileName : List)
+    {
+        // Steuerdatei nicht doppelt versuchen zu löschen
+        String fileUrl = url + fileName.name;
+        stick_log_printf("DeleteDAV-File %s\n",fileUrl.c_str());
+        webdavDeleteFile(fileUrl.c_str(),true); // Deine bereits funktionierende DELETE-Funktion
+    }
+    success=true;
+
+    return success;
+}
+
+void clearLocalRootFolder() {
+    File root = SD_MMC.open("/");
+    
+    if (!root || !root.isDirectory()) {
+        stick_log_printf("[sd] Root could not be opened\n");
+        return;
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+        // Ordner ignorieren wir oder überspringen sie
+        if (!file.isDirectory()) {
+            String filePath = "/" + String(file.name());
+            file.close(); // Datei vor dem Löschen unbedingt schließen!
+            
+            if (SD_MMC.remove(filePath)) {
+                stick_log_printf("[sd] file deleted\n");
+            } else {
+                stick_log_printf("[sd] file delete failed!\n");
+            }
+        } else {
+            file.close();
+        }
+        file = root.openNextFile();
+    }
+    root.close();
 }
