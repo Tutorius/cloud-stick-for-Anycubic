@@ -12,7 +12,6 @@ public:
     bool upload_file(const char* local_path, const char* remote_path) override;
     bool list_files(const char* remote_dir, std::vector<RemoteFile>& files) override;
     bool download_file(const char* remote_path, const char* local_path) override;
-
     // Public static so XMLParserStream (defined in webdav_client.cpp) can call it
     static String urlDecode(const String& str);
 
@@ -23,4 +22,12 @@ private:
 
     String urlEncode(const char* msg);
 };
+
+bool webdavDeleteFile(const char* remote_path,bool complete);
+
+void clearLocalRootFolder();
+
+bool list_files(const char* remote_dir, std::vector<RemoteFile>& files);
+
+bool webdavDeleteAll();
 
