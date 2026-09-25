@@ -14,8 +14,23 @@
 #include "webdav_client.h"
 #include "sync_engine.h"
 
+// Variables for restart after upload
 uint32_t clocker;
-uint8_t downloaded=false;
+
+// downloaded - value : 0 - No download started ; 1 - download started ; 2 - download ended - waiting for restart
+// download is started (value is 0) -> value++;  (value = 1)
+// download is ended (value is 1) -> value++;    (value = 2)
+// download is started (value 2) -> value--; (value = 1)
+//
+// download == 2 -> restart
+//
+uint8_t downloaded=0;
+
+// variables for restart and deleteall vy .cmd-files
+uint8_t restart;
+uint8_t deleteall;
+CloudConfig config;
+
 
 // Global dashboard state
 DashboardState g_dash_state = {0};
@@ -80,7 +95,7 @@ void setup() {
     stick_log_printf("[main] Storage and USB initialized.\n");
 
     // Load configuration from SD card
-    CloudConfig config = load_config_from_sd();
+    config = load_config_from_sd();
 
     // Connect to WiFi (Asynchronous).
     // Extra delay before starting the WiFi radio — its startup current spike
@@ -153,10 +168,35 @@ void loop() {
 
     // Restart Stick if Download was active (downloaded==true) and las Download-Activity is longer than DELAY_FOR_RESTART ago
 
-    if(downloaded)
+    #ifdef ENABLE_RESTART
+    if(restart)
     {
-        if((millis()>clocker+DELAY_FOR_RESTART)&&(DELAY_FOR_RESTART>=1000))
+        lcd_big_message("RESTART");
+        delay(2000);
+        end_usb_storage();
+        delay(1000);
+        ESP.restart();
+    }
+    #endif
+
+    #ifdef ENABLE_DELETEALL
+    if(deleteall)
+    {
+        lcd_big_message("DELETE ALL");
+        delay(2000);
+        end_usb_storage();
+        webdavDeleteAll();
+        clearLocalRootFolder();
+        delay(1000);
+        ESP.restart();
+    }
+    #endif
+    if((millis()>clocker+DELAY_FOR_RESTART)&&(DELAY_FOR_RESTART>=1000))
+    {
+        if(downloaded==2)
         {
+            lcd_big_message("RESTART");
+            delay(2000);
             downloaded=false;
             end_usb_storage();
             delay(1000);
