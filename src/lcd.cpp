@@ -352,3 +352,12 @@ void lcd_show_text(const char *message) {
   tft.drawString(message, 80, 40);
   tft.setTextDatum(TL_DATUM); // Reset to top left
 }
+
+void lcd_big_message(char* Message)
+{
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(0xFFFF);
+  tft.setTextSize(1);
+  tft.setFreeFont(&FreeSans9pt7b);
+  tft.drawString(Message,1,1);
+}
