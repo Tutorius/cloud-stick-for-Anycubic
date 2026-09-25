@@ -107,3 +107,10 @@ void init_usb_storage() {
 bool usb_storage_mounted() {
     return SD_MMC.cardType() != CARD_NONE;
 }
+
+void end_usb_storage()
+{
+    MSC.mediaPresent(false);
+    MSC.end();
+}
+
