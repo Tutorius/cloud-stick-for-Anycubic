@@ -79,3 +79,5 @@ void lcd_dashboard_init();
  * @brief Dynamically update the dashboard with new state without flickering.
  */
 void lcd_dashboard_update(const DashboardState& state);
+
+void lcd_big_message(char* Message);
